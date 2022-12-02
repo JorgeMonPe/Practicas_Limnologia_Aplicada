@@ -1,0 +1,21 @@
+---
+title: "| Limnología Aplicada: Metabolismo de ecosistemas acuáticos. \n| Parte I\n"
+author: "Jorge Juan Montes Pérez"
+date: "12 de mayo de 2020"
+output:
+  html_document:
+    theme: paper
+    css: Formato_ejercicios.css
+  html_notebook: default
+  pdf_document: default
+csl: Limnology_Oceanography_bib.csl
+bibliography: /home/jorge/Documentos/jorge/Documentos/Archivos_Latex/library.bib
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+<div class="ejercicios">
+<h2 class="texto">Tarea</h2>
+<p class="texto">En los datos que acabamos de descargar, la información de cada variable (oxígeno disuelto, temperatura, etc) solo aparece para una profundidad.</p>
+<p class="textoC">Busca información de temperatura del agua medida a distintas profundidades en el Lago Trout. El periodo de tiempo debe ser desde 2004 hasta la actualidad (el mismo periodo que ya tenemos).</p></div>

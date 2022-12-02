@@ -1,0 +1,161 @@
+---
+title: "| Limnología Aplicada: Metabolismo de ecosistemas acuáticos. \n| Parte IV\n"
+output:
+  html_document:
+    css: Formato_ejercicios.css
+    theme: paper
+    code_folding: hide
+csl: Limnology_Oceanography_bib.csl
+bibliography: /home/jorge/Documentos/jorge/Documentos/Archivos_Latex/library.bib
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+##Estabilidad térmica de la columna de agua.
+
+```{r echo = FALSE}
+dt2 <- read.csv("./Datos_descargados/datos_temp_hourly.csv")
+
+```
+
+Como bien sabéis, aunque hayamos asumido que la profundidad de la capa de mezcla es fija durante todo el periodo seleccionado, la estabilidad térmica de la columna de agua cambia a lo largo del año. En los ecosistemas templados, existen por lo general dos periodos de mezclas (lagos dimícticos), uno en otoño después de una estratificación durante el verano y otro en primavera después de la estratificación del invierno que se produce cuando la temperatura de la superficie cae por debajo de 4 $^oC$ y lás aguas más cálidas quedan sumergidas. Aquí en nuestro clima meditarráneo, tenemos por lo general un solo perido de mezcla (lagos monomícticos), en otoño. Esto es debido a que las temperaturas del invierno no son tan bajas como para generar una termoclina inversa.
+
+Si habéis tenido suerte en la búsqueda de los datos que os pedí (recordad que buscabamos información sobre temperatura a distintas profundidas durante el periodo que seleccionamos para el lago Trout), podemos intentar cálcular a que profundidad se encuentra el metalimnion y, por ende, cual es la profundidad de la capa de mezcla (z.mix). Si no los encontrastéis no os preocupéis, [aquí podéis decargarlos](https://portal.edirepository.org/nis/mapbrowse?packageid=knb-lter-ntl.116.26). La resolución que nos interesa es horaria (igual que la de los demás datos con los que hemos trabajado).
+Aquí os dejo el código para descargar directamente los datos que necesitamos a un objeto llamado dt2:
+
+```{r eval = FALSE}
+inUrl2  <- "https://pasta.lternet.edu/package/data/eml/knb-lter-ntl/116/26/c4aeea97f85c26cc39781d6b8dd40cb3" 
+infile2 <- tempfile()
+download.file(inUrl2,infile2,method="curl")
+
+                   
+ dt2 <-read.csv(infile2,header=F 
+          ,skip=1
+            ,sep=","  
+                ,quot='"' 
+        , col.names=c(
+                    "sampledate",     
+                    "year4",     
+                    "month",     
+                    "daynum",     
+                    "hour",     
+                    "depth",     
+                    "wtemp",     
+                    "flag_wtemp"    ), check.names=TRUE)
+               
+  
+# Fix any interval or ratio columns mistakenly read in as nominal and nominal columns read as numeric or dates read as strings
+                                                   
+# attempting to convert dt2$sampledate dateTime string to R date structure (date or POSIXct)                                
+tmpDateFormat<-"%Y-%m-%d"
+tmp2sampledate<-as.Date(dt2$sampledate,format=tmpDateFormat)
+# Keep the new dates only if they all converted correctly
+if(length(tmp2sampledate) == length(tmp2sampledate[!is.na(tmp2sampledate)])){dt2$sampledate <- tmp2sampledate } else {print("Date conversion failed for dt2$sampledate. Please inspect the data and do the date conversion yourself.")}                                                                    
+rm(tmpDateFormat,tmp2sampledate) 
+if (class(dt2$year4)=="factor") dt2$year4 <-as.numeric(levels(dt2$year4))[as.integer(dt2$year4) ]               
+if (class(dt2$year4)=="character") dt2$year4 <-as.numeric(dt2$year4)
+if (class(dt2$month)=="factor") dt2$month <-as.numeric(levels(dt2$month))[as.integer(dt2$month) ]               
+if (class(dt2$month)=="character") dt2$month <-as.numeric(dt2$month)
+if (class(dt2$daynum)=="factor") dt2$daynum <-as.numeric(levels(dt2$daynum))[as.integer(dt2$daynum) ]               
+if (class(dt2$daynum)=="character") dt2$daynum <-as.numeric(dt2$daynum)
+if (class(dt2$depth)=="factor") dt2$depth <-as.numeric(levels(dt2$depth))[as.integer(dt2$depth) ]               
+if (class(dt2$depth)=="character") dt2$depth <-as.numeric(dt2$depth)
+if (class(dt2$wtemp)=="factor") dt2$wtemp <-as.numeric(levels(dt2$wtemp))[as.integer(dt2$wtemp) ]               
+if (class(dt2$wtemp)=="character") dt2$wtemp <-as.numeric(dt2$wtemp)
+if (class(dt2$flag_wtemp)!="factor") dt2$flag_wtemp<- as.factor(dt2$flag_wtemp)
+                
+# Convert Missing Values to NA for non-dates
+                
+
+
+# Here is the structure of the input data frame:
+str(dt2)                            
+attach(dt2)                            
+# The analyses below are basic descriptions of the variables. After testing, they should be replaced.                 
+
+summary(sampledate)
+summary(year4)
+summary(month)
+summary(daynum)
+summary(hour)
+summary(depth)
+summary(wtemp)
+summary(flag_wtemp) 
+detach(dt2)
+```
+
+Una vez hemos descargado los datos vamos a seleccionar el periodo que nos interesa, en función a los datos que ya teníamos seleccionado:
+
+```{r}
+#Cargamos los datos que ya teníamos seleccionados
+datos.ts <-  read.csv("./Datos/datos_ts_2005.csv")
+datos.ts$datetime <- as.POSIXct(datos.ts$datetime)
+
+#Vamos a darle un formato a la fecha homogéneo y coherente con los demás objetos con los que hemos trabajado.
+dt2$datetime <- as.POSIXct(paste(dt2$sampledate, dt2$hour/100), format = "%Y-%m-%d %H")
+
+#Seleccionamos el mismo periodo
+Perfiles_temp <- subset(dt2, datetime >= min(datos.ts$datetime) & datetime <= max(datos.ts$datetime)) 
+rm(dt2) #Eliminamos el archivo para descargar la memoria
+```
+
+Vamos a guardar los datos para más adelante.
+
+```{r}
+write.csv(Perfiles_temp, "./Datos/Perfiles_temp.csv", row.names = FALSE)
+```
+
+
+Una vez seleccionado los datos, podemos empezar a pensar en como calcular la profundidad de la capa de mezcla. El paquete con el que estamos trabajando (`LakeMetabolizer`) cuenta con una función para ello. Esta función, en realidad, es importada de otro paquete muy interesante, [`rLakeAnalyzer`](https://cran.r-project.org/web/packages/rLakeAnalyzer/rLakeAnalyzer.pdf), para los que tengan pensado trabajar con datos limnológicos. En esta práctica no tendremos tiempo de verlo pero merece al menos ser nombrado. La función de la que hablamos es `ts.meta.depths()`. Esta función nos dice entre que profundidades se encuentra el metalimnion. Por encima de este tendremos el epiliminion (capa de mezcla) y por debajo el hipolimion. Si leemos la información de la función (`?ts.meta.depths`), nos explica los datos que tenemos que proporcionarle y cómo. 
+
+Antes de nada, tenemos que modificar el formato de nuestra tabla de datos, vamos a ello:
+
+```{r}
+library(reshape2)
+#Transformamos los datos al formato 'ancho'
+dt_wtemp <- dcast(Perfiles_temp, datetime ~ depth, value.var = "wtemp")
+head(dt_wtemp)
+#Renombramos las columnas según nos pide la función
+colnames(dt_wtemp)[-1] <- paste("wtr", colnames(dt_wtemp)[-1], sep = '_')
+head(dt_wtemp)
+```
+
+Ahora sí podemos aplicar la función:
+
+```{r}
+library(LakeMetabolizer)
+metalimnion <- ts.meta.depths(dt_wtemp, na.rm = TRUE) 
+```
+
+La función tiene el argumento `slope` para que le indiquemos a partir de que gradiente de densidad consideramos que existe termoclina, el defecto es 0.1 y nosotros lo vamos a dejar así.
+
+Este es el resultado:
+
+```{r}
+head(metalimnion)
+```
+
+Ahora seleccionamos la parte superior del metalimnion como límite de nuestra capa de mezcla.
+
+```{r}
+#Reemplazamos los datos de la variable que ya habiamos creado de z.mix
+datos.ts$z.mix <- metalimnion$top
+
+#Guardamos los datos para más adelante
+  write.csv(datos.ts, "./Datos/datos_ts_2005_zmix.csv", row.names = FALSE)
+```
+
+Pues bien, ahora que ya hemos cálculado la profundidad de la capa de mezcla y la hemos añadido a nuestra tabla de datos, podemos volver a calcular las tasa metabólicas, como ya hemos hecho anteriormente. Esto os lo dejo a vosotros...
+
+```{r echo = FALSE, results= "hide", message= FALSE}
+Metabolismo_Trout <- metab(datos.ts, lake.lat = 46, method = "bookkeep")
+write.csv(Metabolismo_Trout, "./Datos/Metabolismo_Trout.csv", row.names = FALSE)
+```
+
+<div class="ejercicios">
+<h2 class="texto">Tarea</h2>
+<p class="texto">Anteriormente asumimos que la capa de mezcla tenía una profundidad fija durante todo el periodo. Ahora, hemos conseguido los datos de temperatura y hemos podido calcular la profundidad de la capa de mezcla.</p>
+<p class="textoC">Vuelve a calcular el metabolismo para el periodo que seleccionamos pero con la profundidad de la capa de mezcla que acabamos de calcular.</p>
+<p class="texto">Sube al campus virtual un arhivo *.csv con el resultado del metabolismo (GPP, R, NEP).</p></div>

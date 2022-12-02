@@ -1,0 +1,66 @@
+---
+title: "| Limnología Aplicada: Metabolismo de ecosistemas acuáticos. \n| Parte II\n"
+output:
+  html_document:
+    css: Formato_ejercicios.css
+    theme: paper
+    code_folding: hide
+csl: Limnology_Oceanography_bib.csl
+bibliography: /home/jorge/Documentos/library.bib
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+## Previsualizamos la información de la que disponemos
+El primer paquete que vamos a usar es "ggplot2". Si no lo tenéis instalado solo hay que ejecutar este comando en la consola: `install.packages("ggplot2")`. Es un paquete muy útil y versátil para hacer gráficas. Aquí os dejo una "chuleta" donde se muestran las opciones de las que dispone el paquete: [ggplot2 info](https://raw.githubusercontent.com/rstudio/cheatsheets/main/data-visualization.pdf). 
+
+Si cerramos la sesión anterior y no tenemos el objeto en nuestro entorno debemos importar los datos que habíamos descargado.
+
+```{r results= "hide", message= FALSE}
+#Library
+  library(ggplot2) #Cargamos el paquete
+#Cargo los datos que habíamos descargado de GLEON
+datos <- read.csv("./Datos_descargados/Datos_Trout.csv")
+datos$sampledate <- as.Date(datos$sampledate)
+
+#Creamos una variable que integra la fecha y la hora
+  datetime <- paste(datos$sampledate, datos$hour)
+  datos$datetime <- as.POSIXct(datetime, format = "%Y-%m-%d %H")
+```
+
+Vamos a echar una visual a los datos de OD, irradiancia, viento y temperatura del agua. Primero recordamos los nombres de las variables de nuestro data.frame:
+
+```{r}
+colnames(datos)
+```
+
+Si tenéis alguna duda sobre cual es cada variable o sus unidades recordad que esa información la tenéis en los metadatos ([*View Full Metadata*](https://portal.edirepository.org/nis/metadataviewer?packageid=knb-lter-ntl.117.38)).
+
+```{r}
+#Previsualizamos valores de Oxigeno disuelto
+ggplot(datos, aes(x = datetime, y = avg_do_raw))+ #Aquí le indicamos que datos queremos representar y cuales son las variables x e y
+  geom_point()+ #El tipo de gráfico que queremos, yo he elegido puntos
+  facet_wrap(~year4, scales = "free") #Le indicamos que haga una gráfica por año
+```
+
+Lo primero que nos dice ggplot es: `## Warning: Removed 7550 rows containing missing values (geom_point)`, empezamos bien... Bueno no os preocupéis en realidad ggplot solo nos está avisando de que tenemos 7550 filas en las que no hay ningún valor para la variable que hemos representado (OD). Esto es normal, en una base de datos tan grande es habitual que no todas las variables estén disponibles para todo el periodo (el sensor de oxígeno se estropea, tienen que quitar la boya por cuestiones técnicas, etc). Si echamos un vistazo a las gráficas podemos notar varias cosas. Por un lado, parece que no tenemos datos para el invierno, los datos van, generalmente, desde principios de junio hasta finales de noviembre. Por otro lado, cabe resaltar que los valores de OD oscilan entre 8-14 mg\/L excepto en los años 2017 que tenemos valores negativos y algunos muy altos de 40 mg\/L.
+
+Si quisieramos indagar un poco más:
+
+```{r}
+length(which(datos$avg_do_raw < 0 | datos$avg_do_raw > 20)) #Vemos cuantos datos se salen del rango de concentración esperado.
+#También podemos seleccionar los datos extraños y ver si alguna variable más muestra valores incoherentes
+datos_OD_out <- subset(datos, avg_do_raw < 0 | avg_do_raw > 20)
+summary(datos_OD_out)
+#¿A que días afecta?
+unique(datos_OD_out$sampledate)
+```
+
+Parece que las únicas variables que también se ven afectadas son oxígeno en saturación y temperatura del agua. Posiblemente esas variables se registran con el mismo sensor y hubo algún fallo en él. 
+
+<div class="ejercicios">
+<h2 class="texto">Tarea</h2>
+<p class="texto">Ahora ya tenemos información descargada y sabes como hacer gráficas sencillas.</p>
+<p class="textoC">Representa gráficamente dos variables. Eres libre de elegir cuales, el formato de la gráfica (puntos, lineas, barras,...) y lo que quieres representar en los ejes (hora, fecha, otra variables,...). Puedes enviar la imagen en el formato que prefieas (me vale hasta un pantallazo). Consejo: Si tienes interés y curiosidad explora la chuleta del paquete [`ggplot2`](https://rstudio.com/wp-content/uploads/2015/03/ggplot2-cheatsheet.pdf). </p>
+<p class="texto">Sube las gráficas al campus virtual.</p></div>

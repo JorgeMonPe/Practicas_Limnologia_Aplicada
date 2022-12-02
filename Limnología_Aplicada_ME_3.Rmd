@@ -1,0 +1,181 @@
+---
+title: "| Limnología Aplicada: Metabolismo de ecosistemas acuáticos. \n| Parte III\n"
+output:
+  html_document:
+    css: Formato_ejercicios.css
+    theme: paper
+    code_folding: hide
+csl: Limnology_Oceanography_bib.csl
+bibliography: /home/jorge/Documentos/library.bib
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Estima del metabolismo del metabolismo aeróbico.
+```{r echo =FALSE, results= "hide", message= FALSE}
+#library
+library(LakeMetabolizer)
+library(dplyr)
+```
+
+Una vez que hemos visualizado las variables de las que disponemos. Vamos a buscar un periodo que nos interese. En este caso nos vamos a fijar solamente en que estén los datos que necesitamos. Sin embargo, con el resto de variables podríamos explorar los datos y buscar un periodo de interés concreto en base a un evento particular (un verano muy caluroso, una época muy ventosa o un periodo de bajas presiones).
+
+Primero vamos a cargar los datos de la sesión anterior.
+
+
+```{r }
+
+#Importo los datos
+datos <- read.csv("./Datos_descargados/Datos_Trout.csv")
+datos$sampledate <- as.Date(datos$sampledate)
+#Creamos una variable que integra la fecha y la hora
+  datetime <- paste(datos$sampledate, datos$hour)
+  datos$datetime <- as.POSIXct(datetime, format = "%Y-%m-%d %H")
+```
+
+Seleccionamos un subgrupo de datos en los que tengamos información de OD, temperatura del agua, velocidad del viento y radiación fotosintéticamente activa (PAR).
+
+```{r}
+Limpios <- subset(datos, !is.na(avg_do_raw) & !is.na(avg_wind_speed) & !is.na(avg_do_wtemp) & !is.na(avg_par))
+```
+
+Nosotros, de aquí, vamos a seleccionar un par de meses de 2005.
+
+```{r}
+Desde <- "2005-09-01"
+Hasta <- "2005-10-31"
+
+#Ahora seleccionamos el periodo en nuestro datos
+Periodo_sel <- subset(Limpios, sampledate >= Desde & sampledate <= Hasta)
+```
+
+
+## Función `metab()` del Paquete LakeMetabolizer
+
+En primer lugar deberéis instalar el paquete y cargalo:
+
+```{r eval=FALSE}
+install.packages("LakeMetabolizer")
+library(LakeMetabolizer)
+```
+
+Aquí tenéis información sobre el paquete:
+
+  1.[Paquete info LakeMetabolizer](https://cran.r-project.org/web/packages/LakeMetabolizer/LakeMetabolizer.pdf).
+  
+  2.[Artículo](https://www.tandfonline.com/doi/pdf/10.1080/IW-6.4.883?needAccess=true).
+  
+La función que vamos a usar es `metab()`. Si queremos saber como usarla, lo que debemos hacer es preguntarle a R `?metab()`. En el apartado "Help" de Rstudio nos aparece la información necesaria sobre la función: Para qué se usa, cómo se usa, los argumentos que necesita y los valores que te devuelve.
+
+Si echamos un vistazo a los argumentos vemos que la información que necesitamos es la siguiente:
+
+  1. Oxígeno disuelto en mg\/L. Para obtener un buena estima del metabolismo lo ideal sería de disponer de una medida de oxígeno al menos cada 30 minutos [@Staehr2010].
+  2. Concentración de oxígeno disuelto (mg\/L) que tendría el agua si estuviera saturada al 100%.
+  3. Coeficiente de intercambio gaseoso en m/día.
+  4. Profundidad de la capa de mezcla en m.
+  5. Irradiancia.
+  6. Temperatura del agua.
+  
+Si revisamos la información de la que disponemos vemos que algunas de ellas ya las tenemos: oxígeno disuelto (avg_do_raw), irradiancia (avg_par) y temperatura del agua (avg_do_wtemp). Sin embargo, no disponemos de todas. Por lo tanto, vamos a intentar obtenerlas todas y, más tarde, cuando las tengamos todas, volveremos de nuevo a la función `metab()`.
+
+### Concentración de oxígeno en saturación.
+
+Para calcular la concentración de oxígeno en saturación, el mismo paquete LakeMetabolizer nos provee una función denominada `o2.at.sat()`. Lo primero que hacemos es ver como funciona `?o2.at.sat()`. Vemos que necesitamos un data.frame con dos columnas, una con la fecha y la hora (datetime) y otra con la temperatura del agua en $^oC$ (wtr). Además, tenemos la opción de introducir la presión barométrica en milibares o la altitud en metros a la que se encuentra el lago. Aunque en nuestros datos tenemos una variable que corresponde con la presión atmosférica parece, por desgracia, que no disponemos de datos para el periodo seleccionado. Bueno, en su lugar podemos usar la altitud a la que se encuentra el lago que sabemos que es de 492 m ([Info Trout Lake](https://lter.limnology.wisc.edu/researchsite/trout-lake)). La salinidad está por defecto en 0, así que como nuestro lago es de agua dulce no debemos cambiarla.
+
+```{r}
+ saturacion <- Periodo_sel[,c("datetime","avg_do_wtemp")] #Creamos un data.frame con las dos variables que necesitamos
+ colnames(saturacion) <- c("datetime", "wtr") #Renombramos las columnas para que la función las reconozca automaticamente.
+ results_sat  <- o2.at.sat(saturacion, altitude = 492)
+```
+
+Ya tenemos la concentración de oxígeno en saturación calculada, vamos a por la siguiente variable.
+
+### Coeficiente de intercambio gaseoso
+
+Para esto, el paquete LakeMetabolizer también dispone de un función que lo calcula `k600.2.kGAS()`. Pero para aplicar esta función antes debemos calcular k~600~.
+
+#### Calcular k~600~
+
+  Si ejecutamos en la consola `?k.read()` podremos ver la distintas opciones que nos ofrece el paquete para calcular la k~600~. Nosotros vamos a usar el método que proponen @Cole1998, para ello usamos la función `k.cole()`. Aquí, la información de la función está, cuanto menos, confusa. Para aplicar la función necesitamos un data.frame con dos columnas, una con la fecha y la hora (datetime) y otra con la velocidad del viento en m/s a 10 metros de altura (wnd). El sensor de "nuestra" boya registra la velocidad del viento a 2 m de altura [@Dugan2016], por lo tanto debemos calcular la velocidad del viento a 10 m. Para ello tambien tenemos una función disponible `wind.scale()`.
+  
+```{r}
+df_k <- Periodo_sel[,c("datetime","avg_wind_speed")] #Creamos un objeto solo con las variables que nos interesan.
+colnames(df_k)[2] <- "wnd" #renombramos la columna con los datos de viento
+#Calculamos la velocidad del viento a 10 m
+df_k <- wind.scale(df_k, wnd.z = 2)
+head(df_k)
+```
+
+Ahora sí podemos calcular la k~600~.
+
+```{r}
+k_600 <- k.cole(df_k)
+head(k_600)
+```
+
+Una vez hemos calculado la k~600~, y teniendo la temperatura del agua, podemos calcular el coeficiente de intercambio gaseoso para el O~2~.
+
+```{r}
+#Añadimos la variable temperatura
+k_600$wtr <- Periodo_sel$avg_do_wtemp
+k_gas <- k600.2.kGAS(k_600, gas = "O2")
+```
+
+Ahora juntamos todos los datos y los ordenamos. Aprovecho para presentaros el paquete `dplyr`. [Aquí tenéis una visión general del paquete](https://4.files.edl.io/b9e2/07/12/19/142839-a23788fb-1d3a-4665-9dc4-33bfd442c296.pdf).
+
+```{r eval = FALSE}
+install.packages("dplyr")
+library("dplyr")
+```
+
+```{r}
+#juntamos todos los datos
+datos.ts <- merge(Periodo_sel, results_sat) %>% merge(k_gas)
+#seleccionamos los que nos atañen.
+datos.ts <- datos.ts[,c("datetime", "avg_do_raw", "do.sat", "k.gas", "avg_par","avg_do_wtemp")]
+#Renombramos las columnas de oxigeno, irradiancia y temperatura para que las interprete la función metab()
+colnames(datos.ts)[c(2,5,6)] <- c("do.obs", "irr", "wtr")
+```
+
+Además debemos añadir la profundidad de la termoclina. Nosotros no disponemos del perfil del temperatura (aún) por lo que no podemos saber donde se sitúa la termoclina, por lo tanto no nos queda más que asumir que el lago permanece mezclado durante todo el periodo.
+
+```{r}
+datos.ts$z.mix <- 15
+```
+
+## Volvemos a la función `metab()`
+
+Bien, ya tenemos los datos que necesitamos ordenaditos en un data.frame, ahora podemos calcular el metabolismo. Para ello, la función nos ofrece 5 métodos para estimar el metabolismo. El más sencillo y el que menos asunciones toma, es el método 'bookkeep' [@Cole1998,@Odum1956], por lo tanto será el que usemos:
+
+```{r error=TRUE}
+Metabolismo <- metab(datos.ts, method = "bookkeep")
+```
+El modelo nos pide que le introduzcamos también la latitud a la que se encuentra el lago o que el vector irradiancia sea de 0 y 1 (noche o día), esto es porque el método "bookkeep" no usa ninguna relación entre GPP e irradiancia, por lo tanto sólo le sirve para saber cuando se es de día o de noche.
+
+```{r}
+Metabolismo_Trout <- metab(datos.ts, lake.lat = 46, method = "bookkeep")
+```
+No os preocupéis por este mensaje. Nos informa que cuando no tiene la información completa para un día no puede calcular el metabolismo para ese día, así que se lo salta y sigue con el siguiente.
+
+```{r}
+head(Metabolismo_Trout)
+summary(Metabolismo_Trout)
+```
+
+Ahora sí, ya hemos calculado el metabolismo (GPP, R y NEP) en el lago Trout durante el periodo de junio-octubre 2018. Con el paquete `ggplot2` podemos comenzar a explorar los datos.
+
+También podemos guardar los resultados en la carpeta "Datos" para trabajar con ellos en otro momento.
+
+```{r}
+write.csv(datos.ts, "./Datos/datos_ts_2005.csv", row.names = FALSE)
+write.csv(Metabolismo_Trout, "./Datos/Metabolismo_Trout.csv", row.names = FALSE)
+```
+
+<div class="ejercicios">
+<h2 class="texto">Tarea</h2>
+<p class="texto">Ninguna que requiera subir nada al campus virtual.</p>
+<p class="textoC">Si quieres puedes probar otro método de estima de metabolismo.</p></div>
+
+## Bibliografía
